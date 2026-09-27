@@ -48,6 +48,21 @@ def _with_line_linked(row):
     return d
 
 
+def _friendly_db_error(e: Exception) -> str:
+    """
+    แปลง exception จาก DB ให้เป็นข้อความที่เข้าใจง่ายขึ้น แทนที่จะโชว์ raw SQL error
+    หรือ hardcode ข้อความเดียวไม่ว่าสาเหตุจะเป็นอะไร (เดิม create_meter เคย hardcode
+    "รหัสมิเตอร์อาจซ้ำ" ทั้งที่บางครั้งสาเหตุจริงคือ user_id/meter_id ที่กรอกไม่มีอยู่จริง)
+    """
+    msg = str(e)
+    lower = msg.lower()
+    if "foreign key constraint fails" in lower:
+        return "ไม่พบ user_id หรือ meter_id ที่ระบุในระบบ กรุณาตรวจสอบว่ามี user/meter นี้อยู่จริง"
+    if "duplicate entry" in lower:
+        return "ข้อมูลนี้มีอยู่แล้วในระบบ (รหัสซ้ำกับที่มีอยู่แล้ว)"
+    return msg
+
+
 #1.Users
 
 @app.post("/users", response_model=UserResponse)
@@ -70,7 +85,7 @@ def create_user(user: UserCreate):
         return _with_line_linked(row)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -143,7 +158,7 @@ def generate_line_link_code(user_id: int):
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -183,7 +198,7 @@ def unlink_line_account(user_id: int):
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -235,7 +250,7 @@ def update_user_location(user_id: int, location: LocationUpdate):
                     longitude = :longitude,
                     formatted_address = :formatted_address,
                     location_source = :location_source,
-                    address = :formatted_address,
+                    address = :formatted_address
                 WHERE user_id = :user_id
             """),
             {
@@ -243,7 +258,6 @@ def update_user_location(user_id: int, location: LocationUpdate):
                 "longitude": longitude,
                 "formatted_address": formatted_address,
                 "location_source": location_source,
-                "province": province,
                 "user_id": user_id,
             },
         )
@@ -258,7 +272,7 @@ def update_user_location(user_id: int, location: LocationUpdate):
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -283,7 +297,7 @@ def create_meter(meter: MeterCreate):
         return row
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -323,7 +337,7 @@ def create_reading(reading: EnergyReadingCreate):
         return row
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -392,7 +406,7 @@ def create_alert(alert: AlertCreate):
         return row
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
 
@@ -437,6 +451,6 @@ def resolve_alert(alert_id: int):
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
