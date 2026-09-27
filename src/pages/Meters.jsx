@@ -7,7 +7,7 @@ import "./Meters.css";
 
 const HIGH_LOAD_A = 16; // กระแสค่าเกินจะ High Load
 
-const EMPTY_FORM = { meter_serial: "", location: "", device_type: "main", status: "active" };
+const EMPTY_FORM = { user_id: "", meter_serial: "", location: "", device_type: "main", status: "active" };
 
 const DEVICE_ICON = {
   main: <FaBolt />,
@@ -28,6 +28,7 @@ function getStatus(meter, reading) {
 
 export default function Meters() {
   const { user, isAdmin } = useAuth();
+  // ใช้กรองว่าตารางด้านล่างแสดงมิเตอร์ของ user คนไหน (แยกจาก user_id ที่จะ "สร้างมิเตอร์ให้" ใน modal)
   const [targetUserId, setTargetUserId] = useState(String(user.user_id));
   const activeUserId = isAdmin ? Number(targetUserId) : user.user_id;
 
@@ -40,6 +41,10 @@ export default function Meters() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // ---------- ตรวจสอบ user ก่อนสร้างมิเตอร์ (เหมือน pattern "โหลดมิเตอร์" ใน Create Alert) ----------
+  const [checkingUser, setCheckingUser] = useState(false);
+  const [checkedUser, setCheckedUser] = useState(null); // { user_id, full_name } | null
 
   const load = useCallback(async () => {
     if (!activeUserId) {
@@ -62,7 +67,7 @@ export default function Meters() {
       setLatest(map);
     } catch (e) {
       console.error("Meters load error:", e.response?.status, e.response?.data || e.message);
-      setError("โหลดรายการมิเตอร์ไม่สำเร็จ");
+      setError(e.userMessage || "โหลดรายการมิเตอร์ไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
@@ -72,33 +77,73 @@ export default function Meters() {
     load();
   }, [load]);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+    if (name === "user_id") setCheckedUser(null); // user_id เปลี่ยน ต้องตรวจสอบใหม่
+  };
+
+  const openModal = () => {
+    // ตั้งค่าเริ่มต้นให้ user_id ในฟอร์ม = user ที่กำลังดูตารางอยู่ (แก้ไขต่อได้)
+    setForm({ ...EMPTY_FORM, user_id: isAdmin ? targetUserId : String(user.user_id) });
+    setCheckedUser(null);
+    setFormError("");
+    setShowModal(true);
+  };
 
   const closeModal = () => {
     setShowModal(false);
     setFormError("");
     setForm(EMPTY_FORM);
+    setCheckedUser(null);
+  };
+
+  const handleCheckUser = async () => {
+    if (!form.user_id) {
+      setFormError("กรุณากรอก user_id ก่อน");
+      return;
+    }
+    setCheckingUser(true);
+    setFormError("");
+    setCheckedUser(null);
+    try {
+      const { data } = await api.get(`/users/${form.user_id}`);
+      setCheckedUser({ user_id: data.user_id, full_name: data.full_name });
+    } catch (e) {
+      setFormError(e.userMessage || "ไม่พบผู้ใช้นี้ในระบบ");
+    } finally {
+      setCheckingUser(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.user_id) {
+      setFormError("กรุณากรอก user_id ของเจ้าของมิเตอร์");
+      return;
+    }
     if (!form.meter_serial.trim()) {
       setFormError("กรุณากรอกรหัสมิเตอร์");
       return;
     }
     setSubmitting(true);
+    setFormError("");
     try {
       await api.post("/meters", {
-        user_id: activeUserId,
+        user_id: Number(form.user_id),
         meter_serial: form.meter_serial.trim(),
         location: form.location.trim() || null,
         device_type: form.device_type,
         status: form.status,
       });
       closeModal();
-      await load();
+      // ถ้า user_id ที่เพิ่งเพิ่มตรงกับ user ที่กำลังดูตารางอยู่ ให้รีเฟรชทันที
+      if (Number(form.user_id) === activeUserId) {
+        await load();
+      }
     } catch (e) {
-      setFormError("เพิ่มมิเตอร์ไม่สำเร็จ (รหัสมิเตอร์อาจซ้ำกับที่มีอยู่แล้ว)");
+      // backend แยกข้อความ error แล้ว (ไม่พบ user_id/meter_id vs. รหัสซ้ำ) ใช้ e.userMessage ตรงๆ
+      setFormError(e.userMessage || "เพิ่มมิเตอร์ไม่สำเร็จ");
     } finally {
       setSubmitting(false);
     }
@@ -111,8 +156,8 @@ export default function Meters() {
           <h3>Registered Smart Meters</h3>
           <p>Monitor and configure hardware endpoints connected to your account</p>
         </div>
-        {isAdmin && (
-          <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-2">
+          {isAdmin && (
             <Form.Control
               type="number"
               min="1"
@@ -120,14 +165,16 @@ export default function Meters() {
               style={{ width: 130 }}
               value={targetUserId}
               onChange={(e) => setTargetUserId(e.target.value)}
-              title="user_id ของเจ้าของมิเตอร์"
+              title="user_id ที่ต้องการดูรายการมิเตอร์"
               placeholder="user_id"
             />
-            <button className="mt-add-btn" onClick={() => setShowModal(true)} disabled={!activeUserId}>
+          )}
+          {isAdmin && (
+            <button className="mt-add-btn" onClick={openModal}>
               <FaPlus /> Add New Meter
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
@@ -195,7 +242,7 @@ export default function Meters() {
         </table>
       </div>
 
-      {/* Modal เพิ่มมิเตอร์ */}
+      {/* Modal เพิ่มมิเตอร์ — user_id อยู่ในฟอร์มเอง พร้อมปุ่มตรวจสอบผู้ใช้ */}
       <Modal show={showModal} onHide={closeModal} centered data-bs-theme="dark">
         <Form onSubmit={handleSubmit}>
           <Modal.Header closeButton>
@@ -203,7 +250,36 @@ export default function Meters() {
           </Modal.Header>
           <Modal.Body>
             {formError && <Alert variant="danger">{formError}</Alert>}
-            <p className="text-secondary small">เจ้าของมิเตอร์: user_id {activeUserId}</p>
+            {checkedUser && (
+              <Alert variant="success" className="py-2">
+                จะเพิ่มมิเตอร์ให้: <strong>{checkedUser.full_name}</strong> (user_id {checkedUser.user_id})
+              </Alert>
+            )}
+
+            <Form.Group className="mb-3">
+              <Form.Label>User ID ของเจ้าของมิเตอร์ *</Form.Label>
+              <div className="d-flex gap-2">
+                <Form.Control
+                  type="number"
+                  name="user_id"
+                  min="1"
+                  value={form.user_id}
+                  onChange={handleChange}
+                  placeholder="เช่น 50"
+                />
+                <Button
+                  variant="outline-light"
+                  onClick={handleCheckUser}
+                  disabled={checkingUser || !form.user_id}
+                >
+                  {checkingUser ? "กำลังตรวจสอบ..." : "ตรวจสอบ"}
+                </Button>
+              </div>
+              <Form.Text className="text-secondary">
+                กด "ตรวจสอบ" เพื่อยืนยันว่า user_id นี้มีอยู่จริงก่อนเพิ่มมิเตอร์ให้
+              </Form.Text>
+            </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>รหัสมิเตอร์ *</Form.Label>
               <Form.Control name="meter_serial" value={form.meter_serial} onChange={handleChange} placeholder="เช่น MTR-MAIN-001" />

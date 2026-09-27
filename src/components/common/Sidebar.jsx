@@ -19,7 +19,6 @@ const LINKS = [
 export default function Sidebar({ collapsed, summary, onNavigate }) {
   const { meterCount, openAlerts, apiOnline } = summary;
   const counts = { meterCount, openAlerts };
-
   const apiHost = (axiosInstance.defaults.baseURL || "").replace(/^https?:\/\//, "");
   const statusTone = apiOnline === null ? "wait" : apiOnline ? "on" : "off";
   const statusLabel =
