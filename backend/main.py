@@ -1,5 +1,7 @@
 import random #สุ่มline
 from datetime import datetime, timedelta #เวลาหมดอายุ
+import calendar
+from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +19,8 @@ from schemas import (
     AlertCreate, AlertResponse,
     LineLinkCodeResponse,
     LineUnlinkResponse,
-    LocationUpdate, LocationMode
-    
+    LocationUpdate, LocationMode,
+    BillPredictionResponse,
 )
 
 app = FastAPI(title="Smart Energy Monitoring API")
@@ -334,6 +336,16 @@ def create_reading(reading: EnergyReadingCreate):
         row = db.execute(
             text("SELECT * FROM energy_readings WHERE reading_id = :id"), {"id": new_id}
         ).mappings().first()
+
+        # Auto-check: anomaly spike + budget threshold
+        # ครอบ try/except แยก เพราะเป็นผลข้างเคียง ไม่ใช่ purpose หลักของ endpoint
+        # (เหมือน pattern การส่ง LINE push ใน create_alert)
+        try:
+            _check_anomaly(db, reading.user_id, reading.meter_id, reading.current)
+            _check_budget(db, reading.user_id, reading.meter_id)
+        except Exception as e:
+            print(f"[Auto Alert Check Error] {e}")
+
         return row
     except Exception as e:
         db.rollback()
@@ -368,6 +380,13 @@ _SEVERITY_LABEL = {
     "high": "🔴 สูง",
 }
 
+_ALERT_TYPE_LABEL = {
+    "anomaly_spike": "กระแสไฟฟ้าพุ่งสูงผิดปกติ",
+    "over_budget": "ใช้งานเกินงบประมาณ",
+    "device_fault": "อุปกรณ์ขัดข้อง",
+    "other": "อื่นๆ",
+}
+
 @app.post("/alerts", response_model=AlertResponse)
 def create_alert(alert: AlertCreate):
     db: Session = SessionLocal()
@@ -379,8 +398,8 @@ def create_alert(alert: AlertCreate):
             """),
             alert.model_dump(),
         )
-        db.commit()#เอาidไปสร้างlogแจ้งเตือน
-        new_id = result.lastrowid 
+        db.commit()
+        new_id = result.lastrowid
         row = db.execute(
             text("SELECT * FROM alerts WHERE alert_id = :id"), {"id": new_id}
         ).mappings().first()
@@ -388,14 +407,23 @@ def create_alert(alert: AlertCreate):
         #แจ้งเตือนผ่าน LINE
         try:
             user_row = db.execute(
-                text("SELECT line_user_id FROM users WHERE user_id = :id"),
-                {"id": alert.user_id},
+                text("""
+                    SELECT u.line_user_id, m.meter_serial
+                    FROM users u
+                    LEFT JOIN meters m ON m.meter_id = :meter_id
+                    WHERE u.user_id = :user_id
+                """),
+                {"user_id": alert.user_id, "meter_id": alert.meter_id},
             ).mappings().first()
 
             if user_row and user_row["line_user_id"]:
                 severity_label = _SEVERITY_LABEL.get(alert.severity.value, alert.severity.value)
+                type_label = _ALERT_TYPE_LABEL.get(alert.alert_type.value, alert.alert_type.value)
+                meter_label = user_row["meter_serial"] or f"#{alert.meter_id}"
                 push_text = (
                     f"⚠️ แจ้งเตือนระบบ Smart Energy\n"
+                    f"มิเตอร์: {meter_label}\n"
+                    f"ประเภท: {type_label}\n"
                     f"ระดับ: {severity_label}\n"
                     f"รายละเอียด: {alert.message}"
                 )
@@ -409,7 +437,6 @@ def create_alert(alert: AlertCreate):
         raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
-
 
 @app.get("/alerts/{user_id}", response_model=list[AlertResponse])
 def get_alerts_by_user(user_id: int):
@@ -454,3 +481,155 @@ def resolve_alert(alert_id: int):
         raise HTTPException(status_code=400, detail=_friendly_db_error(e))
     finally:
         db.close()
+
+#5.Bill Prediction
+@app.get("/users/{user_id}/bill-prediction", response_model=BillPredictionResponse)
+def get_bill_prediction(user_id: int):
+    db: Session = SessionLocal()
+    try:
+        user_row = db.execute(
+            text("SELECT monthly_budget FROM users WHERE user_id = :id"), {"id": user_id}
+        ).mappings().first()
+        if not user_row:
+            raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้นี้")
+
+        now = datetime.now()
+        month_start = _month_start(now)
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        days_elapsed = max(1, now.day)
+
+        total_row = db.execute(
+            text("""
+                SELECT COALESCE(SUM(cost), 0) AS total
+                FROM energy_readings
+                WHERE user_id = :user_id AND timestamp >= :month_start
+            """),
+            {"user_id": user_id, "month_start": month_start},
+        ).mappings().first()
+        month_to_date_cost = Decimal(str(total_row["total"]))
+
+        avg_per_day = month_to_date_cost / days_elapsed
+        predicted_total = avg_per_day * days_in_month
+
+        return {
+            "user_id": user_id,
+            "month_to_date_cost": month_to_date_cost,
+            "days_elapsed": days_elapsed,
+            "days_in_month": days_in_month,
+            "avg_cost_per_day": avg_per_day,
+            "predicted_total_cost": predicted_total,
+            "monthly_budget": user_row["monthly_budget"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
+    finally:
+        db.close()
+
+
+
+# Thresholds ของmeter 
+HIGH_LOAD_A = 16          # ให้ตรงกับ threshold ที่หน้า Meters.jsx ใช้ตัดสิน "High Load"
+BUDGET_NEAR_RATIO = 0.8   # แจ้งเตือนเมื่อถึง 80% ของงบ
+
+
+def _month_start(dt: datetime) -> datetime:
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _insert_alert(db: Session, user_id: int, meter_id: int, alert_type: str, message: str, severity: str):
+    """สร้าง alert record + ส่ง LINE push — ใช้ร่วมกันจาก auto-check (anomaly/budget)"""
+    result = db.execute(
+        text("""
+            INSERT INTO alerts (user_id, meter_id, alert_type, message, severity, is_resolved)
+            VALUES (:user_id, :meter_id, :alert_type, :message, :severity, FALSE)
+        """),
+        {"user_id": user_id, "meter_id": meter_id, "alert_type": alert_type,
+         "message": message, "severity": severity},
+    )
+    db.commit()
+
+    try:
+        user_row = db.execute(
+            text("SELECT line_user_id FROM users WHERE user_id = :id"), {"id": user_id}
+        ).mappings().first()
+        if user_row and user_row["line_user_id"]:
+            severity_label = _SEVERITY_LABEL.get(severity, severity)
+            push_text = f"⚠️ แจ้งเตือนระบบ Smart Energy\nระดับ: {severity_label}\nรายละเอียด: {message}"
+            send_line_push(user_row["line_user_id"], push_text)
+    except Exception as e:
+        print(f"[LINE Push Error - auto alert] {e}")
+
+    return result.lastrowid
+
+
+def _check_anomaly(db: Session, user_id: int, meter_id: int, current: Decimal):
+    """Threshold แบบง่าย: current เกิน HIGH_LOAD_A -> สร้าง anomaly_spike
+    กันสแปม: ถ้ามี anomaly_spike ที่ยัง unresolved ของมิเตอร์นี้อยู่แล้ว ไม่สร้างซ้ำ"""
+    amp = float(current)
+    if amp < HIGH_LOAD_A:
+        return
+
+    existing = db.execute(
+        text("""
+            SELECT alert_id FROM alerts
+            WHERE meter_id = :meter_id AND alert_type = 'anomaly_spike' AND is_resolved = FALSE
+            LIMIT 1
+        """),
+        {"meter_id": meter_id},
+    ).mappings().first()
+    if existing:
+        return
+
+    severity = "high" if amp >= HIGH_LOAD_A * 1.5 else "medium"
+    message = f"ตรวจพบกระแสไฟฟ้าพุ่งสูงผิดปกติ ({amp:.2f} A) อาจเกิดจากไฟรั่วหรืออุปกรณ์ขัดข้อง"
+    _insert_alert(db, user_id, meter_id, "anomaly_spike", message, severity)
+
+
+def _check_budget(db: Session, user_id: int, meter_id: int):
+    """เทียบค่าไฟสะสมเดือนนี้กับ monthly_budget -> over_budget ที่ 80% (medium) / 100% (high)
+    กันสแปม: เช็คว่ามี alert ระดับเดียวกันของเดือนนี้ที่สร้างไปแล้วหรือยัง"""
+    user_row = db.execute(
+        text("SELECT monthly_budget FROM users WHERE user_id = :id"), {"id": user_id}
+    ).mappings().first()
+    if not user_row or user_row["monthly_budget"] is None:
+        return
+
+    budget = float(user_row["monthly_budget"])
+    if budget <= 0:
+        return
+
+    month_start = _month_start(datetime.now())
+    total_row = db.execute(
+        text("""
+            SELECT COALESCE(SUM(cost), 0) AS total
+            FROM energy_readings
+            WHERE user_id = :user_id AND timestamp >= :month_start
+        """),
+        {"user_id": user_id, "month_start": month_start},
+    ).mappings().first()
+    total_cost = float(total_row["total"])
+
+    if total_cost >= budget:
+        severity = "high"
+        message = f"ค่าไฟฟ้าเดือนนี้ ({total_cost:.2f} บาท) เกินงบที่ตั้งไว้ ({budget:.2f} บาท) แล้ว"
+    elif total_cost >= budget * BUDGET_NEAR_RATIO:
+        severity = "medium"
+        message = f"ค่าไฟฟ้าเดือนนี้ ({total_cost:.2f} บาท) ใกล้ถึงงบที่ตั้งไว้ ({budget:.2f} บาท) แล้ว (80%+)"
+    else:
+        return
+
+    existing = db.execute(
+        text("""
+            SELECT alert_id FROM alerts
+            WHERE user_id = :user_id AND alert_type = 'over_budget'
+              AND severity = :severity AND created_at >= :month_start
+            LIMIT 1
+        """),
+        {"user_id": user_id, "severity": severity, "month_start": month_start},
+    ).mappings().first()
+    if existing:
+        return
+
+    _insert_alert(db, user_id, meter_id, "over_budget", message, severity)

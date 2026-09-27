@@ -127,3 +127,13 @@ class AlertCreate(BaseModel):
 class AlertResponse(AlertCreate):
     alert_id: int
     created_at: datetime
+
+#5.Bill Prediction
+class BillPredictionResponse(BaseModel):
+    user_id: int
+    month_to_date_cost: Decimal
+    days_elapsed: int
+    days_in_month: int
+    avg_cost_per_day: Decimal
+    predicted_total_cost: Decimal
+    monthly_budget: Optional[Decimal] = None
