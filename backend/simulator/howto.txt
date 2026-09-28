@@ -1,0 +1,13 @@
+ python simulate_readings.py 55                 # ย้อนหลังตั้งแต่ต้นเดือนถึงตอนนี้
+  python simulate_readings.py 55 --days 3        # ย้อนหลัง 3 วัน
+  python simulate_readings.py 55 --force         # ยอมให้ข้อมูลซ้ำ (ถ้า user มีข้อมูลอยู่แล้ว)
+  python simulate_readings.py 55 --spike         # ส่งค่ากระแสพุ่ง 1 ครั้ง (เดโม anomaly)
+  python simulate_readings.py 55 --live          # ส่งข้อมูลสดทุก 5 วินาที (Ctrl+C เพื่อหยุด)
+  python simulate_readings.py 55 --live --every 3 
+
+
+--days	=ย้อนหลังกี่วัน (เริ่มต้น: ตั้งแต่ต้นเดือน)
+--force	=ยิงต่อแม้ user นี้มีข้อมูลอยู่แล้ว (จะเกิดข้อมูลซ้ำ)
+--spike	=ส่งค่ากระแสพุ่ง 1 ครั้ง"
+--live		=ส่งข้อมูลสดต่อเนื่อง
+--every	=ช่วงเวลาส่งในโหมด live (วินาที, ค่าเริ่มต้น 5)
