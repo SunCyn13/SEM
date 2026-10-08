@@ -4,6 +4,7 @@ import { getUser } from "../api/userApi";
 import { useAuth } from "../context/AuthContext";
 import LineConnectCard from "../components/line/LineConnectCard";
 import LocationPicker from "../components/location/LocationPicker";
+import BudgetCard from "../components/budget/BudgetCard";
 
 const Row = ({ label, value }) => (
   <div className="d-flex justify-content-between py-2 border-bottom" style={{ borderColor: "var(--border)" }}>
@@ -54,7 +55,13 @@ export default function Settings() {
         <div className="col-lg-6">
           <LineConnectCard />
         </div>
-        
+
+        {profile && (
+          <div className="col-lg-6">
+            <BudgetCard profile={profile} onSaved={setProfile} />
+          </div>
+        )}
+
         {profile && (
           <div className="col-12">
             <LocationPicker profile={profile} onSaved={setProfile} />
