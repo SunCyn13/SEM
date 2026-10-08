@@ -21,6 +21,7 @@ from schemas import (
     LineUnlinkResponse,
     LocationUpdate, LocationMode,
     BillPredictionResponse,
+    BudgetUpdate,
 )
 
 app = FastAPI(title="Smart Energy Monitoring API")
@@ -270,6 +271,35 @@ def update_user_location(user_id: int, location: LocationUpdate):
         ).mappings().first()
         return _with_line_linked(row)
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
+    finally:
+        db.close()
+
+
+@app.patch("/users/{user_id}/budget", response_model=UserResponse)
+def update_user_budget(user_id: int, body: BudgetUpdate):
+    db: Session = SessionLocal()
+    try:
+        exists = db.execute(
+            text("SELECT user_id FROM users WHERE user_id = :id"), {"id": user_id}
+        ).mappings().first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้นี้")
+
+        db.execute(
+            text("UPDATE users SET monthly_budget = :budget WHERE user_id = :id"),
+            {"budget": body.monthly_budget, "id": user_id},
+        )
+        db.commit()
+
+        row = db.execute(
+            text("SELECT * FROM users WHERE user_id = :id"), {"id": user_id}
+        ).mappings().first()
+        return _with_line_linked(row)
     except HTTPException:
         raise
     except Exception as e:

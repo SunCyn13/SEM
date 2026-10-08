@@ -88,6 +88,10 @@ class LocationUpdate(BaseModel):
                 raise ValueError("mode='pin' ต้องระบุ latitude และ longitude")
         return self
 
+class BudgetUpdate(BaseModel):
+    # None = ล้างงบ (ไม่มี alert over_budget)
+    monthly_budget: Optional[Decimal] = Field(None, gt=0, le=1000000)
+
 #2.Meters
 class MeterCreate(BaseModel):
     user_id: int
