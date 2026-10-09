@@ -1,4 +1,5 @@
 import random #สุ่มline
+import re
 from datetime import datetime, timedelta #เวลาหมดอายุ
 import calendar
 from decimal import Decimal
@@ -423,6 +424,42 @@ def get_readings_summary(user_id: int):
     finally:
         db.close()
 
+@app.delete("/readings/{user_id}")
+def delete_readings_by_user(user_id: int, admin_id: int, meter_id: int | None = None):
+    """ลบข้อมูล energy_readings ของ user (หรือเฉพาะมิเตอร์ที่ระบุ) - admin เท่านั้น"""
+    db: Session = SessionLocal()
+    try:
+        admin = db.execute(
+            text("SELECT role FROM users WHERE user_id = :id"), {"id": admin_id}
+        ).mappings().first()
+        if not admin or admin["role"] != "admin":
+            raise HTTPException(status_code=403, detail="เฉพาะ admin เท่านั้นที่ลบข้อมูลได้")
+
+        target = db.execute(
+            text("SELECT user_id FROM users WHERE user_id = :id"), {"id": user_id}
+        ).mappings().first()
+        if not target:
+            raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้นี้")
+
+        if meter_id is not None:
+            result = db.execute(
+                text("DELETE FROM energy_readings WHERE user_id = :u AND meter_id = :m"),
+                {"u": user_id, "m": meter_id},
+            )
+        else:
+            result = db.execute(
+                text("DELETE FROM energy_readings WHERE user_id = :u"),
+                {"u": user_id},
+            )
+        db.commit()
+        return {"user_id": user_id, "deleted": result.rowcount}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
+    finally:
+        db.close()
 #4.Alerts
 
 _SEVERITY_LABEL = {
@@ -684,3 +721,93 @@ def _check_budget(db: Session, user_id: int, meter_id: int):
         return
 
     _insert_alert(db, user_id, meter_id, "over_budget", message, severity)
+
+
+#6.Admin Overview
+def _province_from_address(addr):
+    """ดึงจังหวัดจาก formatted_address (รูปแบบอังกฤษ: '..., Nakhon Pathom, Thailand')"""
+    if not addr:
+        return None
+    parts = [p.strip() for p in addr.split(",")]
+    if len(parts) < 2 or parts[-1].lower() != "thailand":
+        return None
+    province = re.sub(r"\d+", "", parts[-2]).strip()
+    return province or None
+
+
+@app.get("/admin/overview")
+def admin_overview(admin_id: int):
+    db: Session = SessionLocal()
+    try:
+        # เช็ก role ที่ฝั่ง backend (ไม่เชื่อ frontend อย่างเดียว)
+        admin = db.execute(
+            text("SELECT role FROM users WHERE user_id = :id"), {"id": admin_id}
+        ).mappings().first()
+        if not admin or admin["role"] != "admin":
+            raise HTTPException(status_code=403, detail="เฉพาะผู้ดูแลระบบเท่านั้น")
+
+        month_start = _month_start(datetime.now())
+        rows = db.execute(
+            text("""
+                SELECT u.user_id, u.full_name, u.email, u.latitude, u.longitude,
+                       u.formatted_address, u.monthly_budget,
+                       (SELECT COUNT(*) FROM meters m
+                         WHERE m.user_id = u.user_id) AS meter_count,
+                       (SELECT COUNT(*) FROM alerts a
+                         WHERE a.user_id = u.user_id AND a.is_resolved = FALSE) AS open_alerts,
+                       (SELECT COALESCE(SUM(r.kwh), 0) FROM energy_readings r
+                         WHERE r.user_id = u.user_id AND r.timestamp >= :ms) AS month_kwh,
+                       (SELECT COALESCE(SUM(r.cost), 0) FROM energy_readings r
+                         WHERE r.user_id = u.user_id AND r.timestamp >= :ms) AS month_cost
+                FROM users u
+                ORDER BY open_alerts DESC, month_cost DESC
+            """),
+            {"ms": month_start},
+        ).mappings().all()
+
+        users = []
+        by_province = {}
+        for r in rows:
+            province = _province_from_address(r["formatted_address"]) or "ไม่ระบุ"
+            item = {
+                "user_id": r["user_id"],
+                "full_name": r["full_name"],
+                "email": r["email"],
+                "latitude": float(r["latitude"]) if r["latitude"] is not None else None,
+                "longitude": float(r["longitude"]) if r["longitude"] is not None else None,
+                "formatted_address": r["formatted_address"],
+                "province": province,
+                "monthly_budget": float(r["monthly_budget"]) if r["monthly_budget"] is not None else None,
+                "meter_count": int(r["meter_count"]),
+                "open_alerts": int(r["open_alerts"]),
+                "month_kwh": float(r["month_kwh"]),
+                "month_cost": float(r["month_cost"]),
+            }
+            users.append(item)
+
+            p = by_province.setdefault(
+                province,
+                {"province": province, "users": 0, "month_kwh": 0.0, "month_cost": 0.0, "open_alerts": 0},
+            )
+            p["users"] += 1
+            p["month_kwh"] += item["month_kwh"]
+            p["month_cost"] += item["month_cost"]
+            p["open_alerts"] += item["open_alerts"]
+
+        return {
+            "totals": {
+                "users": len(users),
+                "meters": sum(u["meter_count"] for u in users),
+                "open_alerts": sum(u["open_alerts"] for u in users),
+                "month_kwh": sum(u["month_kwh"] for u in users),
+                "month_cost": sum(u["month_cost"] for u in users),
+            },
+            "provinces": sorted(by_province.values(), key=lambda p: p["month_cost"], reverse=True),
+            "users": users,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=_friendly_db_error(e))
+    finally:
+        db.close()

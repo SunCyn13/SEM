@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 import requests
 
 API = "http://localhost:8000"
-USER_ID = 50
-METER_SERIAL = "MTR-50-001"   
+USER_ID = 57
+METER_SERIAL = "MTR-57-001"   
 DAYS_BACK = 3                 # จำลองย้อนหลัง
 INTERVAL_MIN = 15             # ทุกกี่นาที (ตามแนวคิดโปรเจกต์)
 RATE_PER_KWH = 4.0            
