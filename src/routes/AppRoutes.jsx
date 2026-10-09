@@ -7,6 +7,7 @@ import Dashboard from "../pages/Dashboard";
 import Meters from "../pages/Meters";
 import Alerts from "../pages/Alerts";
 import Settings from "../pages/Settings";
+import AdminOverview from "../pages/AdminOverview";
 
 export default function AppRoutes() {
   return (
@@ -18,6 +19,7 @@ export default function AppRoutes() {
         <Route path="/meters" element={<Meters />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminOverview /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

@@ -3,11 +3,13 @@ import {
   FaBolt,
   FaBurst,
   FaChartLine,
+  FaEarthAsia,
   FaGaugeHigh,
   FaTriangleExclamation,
   FaUserGear,
 } from "react-icons/fa6";
 import axiosInstance from "../../api/axiosInstance";
+import { useAuth } from "../../context/AuthContext";
 
 const LINKS = [
   { to: "/dashboard", label: "Dashboard", icon: <FaChartLine /> },
@@ -16,7 +18,11 @@ const LINKS = [
   { to: "/settings", label: "User Profile & LINE", icon: <FaUserGear /> },
 ];
 
+const ADMIN_LINK = { to: "/admin", label: "Admin Overview", icon: <FaEarthAsia /> };
+
 export default function Sidebar({ collapsed, summary, onNavigate }) {
+  const { isAdmin } = useAuth();
+  const links = isAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
   const { meterCount, openAlerts, apiOnline } = summary;
   const counts = { meterCount, openAlerts };
   const apiHost = (axiosInstance.defaults.baseURL || "").replace(/^https?:\/\//, "");
@@ -35,7 +41,7 @@ export default function Sidebar({ collapsed, summary, onNavigate }) {
       </div>
 
       <nav className="sb-nav">
-        {LINKS.map((l) => {
+        {links.map((l) => {
           const n = l.badge ? counts[l.badge] : 0;
           return (
             <NavLink

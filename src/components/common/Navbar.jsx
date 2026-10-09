@@ -15,6 +15,7 @@ const TITLES = {
   "/meters": "Meters Management",
   "/alerts": "Alerts & Logs",
   "/settings": "User Profile & LINE",
+  "/admin": "Admin Overview",
 };
 
 function Clock() {
