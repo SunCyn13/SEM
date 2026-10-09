@@ -70,11 +70,11 @@ export default function Dashboard() {
       <div className="d-flex justify-content-between align-items-start">
         <div>
           <h2>Dashboard</h2>
-          <p className="text-secondary">สวัสดี, {user.full_name}</p>
+          <p className="text-secondary">Hi, {user.full_name}</p>
         </div>
         {isAdmin && (
           <Button variant="outline-danger" size="sm" onClick={() => setShowClear(true)}>
-            <FaTrash /> ล้างข้อมูล
+            <FaTrash /> ClearUserData
           </Button>
         )}
       </div>

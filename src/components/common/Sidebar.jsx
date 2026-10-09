@@ -15,7 +15,7 @@ const LINKS = [
   { to: "/dashboard", label: "Dashboard", icon: <FaChartLine /> },
   { to: "/meters", label: "Meters Management", icon: <FaGaugeHigh />, badge: "meterCount" },
   { to: "/alerts", label: "Alerts & Logs", icon: <FaTriangleExclamation />, badge: "openAlerts", warn: true },
-  { to: "/settings", label: "User Profile & LINE", icon: <FaUserGear /> },
+  { to: "/settings", label: "User Profile ", icon: <FaUserGear /> },
 ];
 
 const ADMIN_LINK = { to: "/admin", label: "Admin Overview", icon: <FaEarthAsia /> };

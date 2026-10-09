@@ -20,7 +20,7 @@ export default function BudgetCard({ profile, onSaved }) {
       const { data } = await getBillPrediction(userId);
       setPred(data);
     } catch {
-      setPred(null); // การ์ดยังใช้แก้งบได้แม้โหลดคาดการณ์ไม่สำเร็จ
+      setPred(null); 
     }
   }, [userId]);
 
@@ -93,11 +93,11 @@ export default function BudgetCard({ profile, onSaved }) {
         </InputGroup>
         <div className="d-flex gap-2">
           <Button type="submit" disabled={busy}>
-            {busy ? "กำลังบันทึก..." : "บันทึกงบ"}
+            {busy ? "กำลังบันทึก" : "บันทึก"}
           </Button>
           {saved != null && (
             <Button variant="outline-danger" disabled={busy} onClick={() => save(null)}>
-              ล้างงบ
+              ล้าง
             </Button>
           )}
         </div>
@@ -106,7 +106,7 @@ export default function BudgetCard({ profile, onSaved }) {
       {pred && (
         <div className="mt-4">
           <div className="d-flex justify-content-between small mb-1">
-            <span className="text-secondary">ค่าไฟสะสมเดือนนี้</span>
+            <span className="text-secondary">ค่าไฟเดือนนี้</span>
             <span>
               {fmt(spent)} บาท{saved ? ` (${pct.toFixed(0)}%)` : ""}
             </span>

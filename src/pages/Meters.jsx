@@ -153,8 +153,8 @@ export default function Meters() {
     <div className="mt-page">
       <div className="mt-header">
         <div>
-          <h3>Registered Smart Meters</h3>
-          <p>Monitor and configure hardware endpoints connected to your account</p>
+          <h3>Registered Meters</h3>
+          <p>ดูรายการและสถานะมิเตอร์ที่ลงทะเบียนไว้</p>
         </div>
         <div className="d-flex align-items-center gap-2">
           {isAdmin && (

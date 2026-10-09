@@ -7,7 +7,7 @@
   --sb-width: 240px;
 }
 
-/* ---------- Sidebar ---------- */
+/* Sidebar */
 .sb {
   width: var(--sb-width);
   flex-shrink: 0;
@@ -84,7 +84,7 @@
 
 .sb-backdrop { display: none; }
 
-/* ---------- Navbar ---------- */
+/* Navbar */
 .tb {
   position: sticky; top: 0; z-index: 1030;
   display: flex; justify-content: space-between; align-items: center;
@@ -138,7 +138,7 @@
 .tb-user-line { font-size: 11px; color: var(--text-muted); }
 .tb-user-line.linked { color: var(--brand-soft); font-weight: 600; }
 
-/* ---------- Responsive ---------- */
+/* Popupของsidebar*/
 @media (max-width: 991.98px) {
   .sb {
     position: fixed; left: 0; top: 0; bottom: 0;
@@ -162,7 +162,7 @@
   .sb { transition: none; }
 }
 
-/* ---------- Quick System Settings modal ---------- */
+/* Quick System Settings */
 .qs-dialog { max-width: 430px; }
 .qs-content {
   background: #0d1526;

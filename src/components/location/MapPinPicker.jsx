@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "react-bootstrap";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 
-const DEFAULT_CENTER = { lat: 13.7563, lng: 100.5018 }; //กรุงเทพ
+const DEFAULT_CENTER = { lat: 13.7563, lng: 100.5018 }; //ตั้งเริ่มที่กทม
 const MAP_STYLE = { width: "100%", height: 320, borderRadius: 8 };
 
 export default function MapPinPicker({ initial, onSubmit, busy }) {
@@ -14,11 +14,11 @@ export default function MapPinPicker({ initial, onSubmit, busy }) {
   const setFromEvent = (e) => setPin({ lat: e.latLng.lat(), lng: e.latLng.lng() });
 
   if (loadError) return <p className="text-danger">โหลดแผนที่ไม่สำเร็จ (เช็ค VITE_GOOGLE_MAPS_API_KEY)</p>;
-  if (!isLoaded) return <p className="text-secondary">กำลังโหลดแผนที่...</p>;
+  if (!isLoaded) return <p className="text-secondary">กำลังโหลดแผนที่</p>;
 
   return (
     <div>
-      <p className="small text-secondary">คลิกบนแผนที่เพื่อปักหมุด (ลากหมุดเพื่อปรับตำแหน่งได้)</p>
+      <p className="small text-secondary">คลิกบนแผนที่เพื่อปักหมุด</p>
       <GoogleMap
         mapContainerStyle={MAP_STYLE}
         center={pin || DEFAULT_CENTER}
@@ -41,7 +41,7 @@ export default function MapPinPicker({ initial, onSubmit, busy }) {
             })
           }
         >
-          {busy ? "กำลังบันทึก..." : "บันทึกตำแหน่งที่ปักหมุด"}
+          {busy ? "กำลังบันทึก" : "บันทึกตำแหน่งที่ปักหมุด"}
         </Button>
       </div>
     </div>

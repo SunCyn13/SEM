@@ -196,7 +196,7 @@ export default function Alerts() {
       <div className="al-header">
         <div>
           <h3>Alerts</h3>
-          <p>การแจ้งเตือนความผิดปกติและการใช้ไฟเกินงบของมิเตอร์</p>
+          <p>การแจ้งเตือนของมิเตอร์</p>
         </div>
         <div className="d-flex align-items-center gap-2">
           {isAdmin && (

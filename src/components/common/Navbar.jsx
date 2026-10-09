@@ -8,13 +8,13 @@ import {
   FaSliders,
 } from "react-icons/fa6";
 import { useAuth } from "../../context/AuthContext";
-import QuickSettingsModal from "./QuickSettingsModal";
+import QuickSettingsModal from "./QuickSettings";
 
 const TITLES = {
   "/dashboard": "Smart Energy Overview",
   "/meters": "Meters Management",
   "/alerts": "Alerts & Logs",
-  "/settings": "User Profile & LINE",
+  "/settings": "User Profile ",
   "/admin": "Admin Overview",
 };
 

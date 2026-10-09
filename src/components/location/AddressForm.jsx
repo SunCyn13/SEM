@@ -17,11 +17,11 @@ export default function AddressForm({ onSubmit, busy }) {
         <Form.Control
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="เช่น ซอยสุขุมวิท 21 หรือ มหาวิทยาลัย ABC"
+          placeholder="เช่น  175 หมู่ 12 ถ.มาลัยแมน ตำบลกำแพงแสน  "
         />
       </Form.Group>
       <Button type="submit" disabled={busy || !address.trim()}>
-        {busy ? "กำลังค้นหา..." : "ค้นหาและบันทึกตำแหน่ง"}
+        {busy ? "กำลังค้นหา" : "ค้นหาและบันทึกตำแหน่ง"}
       </Button>
     </Form>
   );

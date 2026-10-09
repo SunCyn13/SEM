@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 const STORAGE_KEY = "app_settings";
 
-export const REFRESH_OPTIONS = [3, 5, 10, 30, 60]; // วินาที
+export const REFRESH_OPTIONS = [3, 5, 10, 30, 60]; 
 
 const DEFAULTS = {
   refreshSeconds: 3,

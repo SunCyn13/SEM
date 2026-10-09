@@ -36,7 +36,7 @@ export default function LocationPicker({ profile, onSaved }) {
     <div className="card-dark">
       <h5 className="mb-1">ตำแหน่งที่ตั้ง</h5>
       <div className="small text-secondary mb-3">
-        ใช้แสดงตำแหน่งมิเตอร์บนแผนที่ของระบบ
+        ตำแหน่งบ้านหรือสถานที่ติดตั้งมิเตอร์ของคุณ 
       </div>
 
       {hasSaved ? (
